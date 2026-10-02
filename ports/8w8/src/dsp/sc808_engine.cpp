@@ -11,6 +11,7 @@
 
 #include "sc808_voices.h"
 #include "sc808_bd_circuit.h"
+#include "sc808_bd_punch.h"
 #include "sc808_cp_circuit.h"
 #include "sc808_sd_circuit.h"
 #include "sc808_tom_circuit.h"
@@ -252,6 +253,10 @@ struct sc808_engine {
     /* Voice-specific extras that only some lanes have. */
     int bd_attack, bd_tone, sd_snappy;
     int ma_attack;
+    /* The Punch kick (local addition, see sc808_bd_punch.h). */
+    int e_bd_model;
+    int p_bd_pitch, p_bd_pdecay, p_bd_harm, p_bd_pulse, p_bd_noise,
+        p_bd_gate, p_bd_comp;
     /* Globals. */
     int e_master_dist, e_choke, e_note_map;
     int p_master_drive, p_volume, p_vel_depth, p_comp;
@@ -276,6 +281,7 @@ struct sc808_engine {
     unsigned mutes;
 
     CircuitBassDrum bdc;   /* the bridged-T circuit   */
+    PunchKick       bdp;   /* bd_model == 1: pitch-envelope kick */
     CircuitSnare    sdc;   /* two bridged-T shells    */
     ClapCircuit     cpc;   /* burst, tail, 874 Hz MFB */
     /* Six copies of one channel, three struck as toms and three as
@@ -403,6 +409,14 @@ sc808_engine_t *sc808_create(float sample_rate)
     e->bd_tone   = find_pot("bd_tone");
     e->sd_snappy = find_pot("sd_snappy");
     e->ma_attack = find_pot("ma_attack");
+    e->e_bd_model  = find_enum("bd_model");
+    e->p_bd_pitch  = find_pot("bd_pitch");
+    e->p_bd_pdecay = find_pot("bd_pdecay");
+    e->p_bd_harm   = find_pot("bd_harm");
+    e->p_bd_pulse  = find_pot("bd_pulse");
+    e->p_bd_noise  = find_pot("bd_noise");
+    e->p_bd_gate   = find_pot("bd_gate");
+    e->p_bd_comp   = find_pot("bd_comp");
     e->p_master_drive = find_pot("master_drive");
     e->p_volume       = find_pot("volume");
     e->p_vel_depth    = find_pot("vel_depth");
@@ -422,6 +436,7 @@ sc808_engine_t *sc808_create(float sample_rate)
 
     const double sr = e->sample_rate;
     e->bdc.init(sr);
+    e->bdp.init(sr);
     e->sdc.init(sr);
     e->cpc.init(sr);
     e->ltc.init(sr, 0); e->mtc.init(sr, 0); e->htc.init(sr, 0);
@@ -545,6 +560,28 @@ void sc808_trigger(sc808_engine_t *e, int voice, int velocity)
     {
     case SC808_BD:
     {
+        /*
+         * bd_model 1 is the Punch kick: one phase-reset oscillator under a
+         * pitch envelope. Tune, Decay, Attack and Tone are the same four
+         * pots the circuit kick reads (Tone is its EQ here), so the panel
+         * keeps working when the model changes. Velocity is a plain GAIN on
+         * this voice — hit_gain already holds it.
+         */
+        if(e->env[e->e_bd_model] == 1)
+        {
+            e->bdp.trigger(lane_hz(voice, tune),
+                           (float)e->pot[e->slot[voice].decay] / 127.0f,
+                           (float)e->pot[e->bd_tone]   / 127.0f,
+                           (float)e->pot[e->bd_attack] / 127.0f,
+                           e->potv[e->p_bd_pitch],
+                           e->potv[e->p_bd_pdecay],
+                           e->potv[e->p_bd_harm],
+                           e->potv[e->p_bd_pulse],
+                           e->potv[e->p_bd_noise],
+                           e->potv[e->p_bd_gate],
+                           e->potv[e->p_bd_comp]);
+            break;
+        }
         /*
          * The circuit kick. Its three pots are read as raw POT POSITIONS
          * rather than through the pot table's engineering mapping — Decay
@@ -741,7 +778,17 @@ void sc808_render(sc808_engine_t *e, float *out, int frames)
     for(int i = 0; i < frames; ++i)
     {
         float mix = 0.0f, send_r = 0.0f, send_d = 0.0f;
-        SC808_LANE(SC808_BD, bdc);
+        /* The kick lane has two models. Only the selected one is ever
+         * triggered, but the other may still be ringing out after a switch,
+         * so both feed the ONE lane: one drive stage, one choke ramp. */
+        if(e->rt[SC808_BD].choke_gain > 0.0f
+           && (e->bdc.active() || e->bdp.active()))
+        {
+            float raw = 0.0f;
+            if(e->bdc.active()) raw += (float)e->bdc.process();
+            if(e->bdp.active()) raw += (float)e->bdp.process();
+            sc808_add(e, SC808_BD, raw, &mix, &send_r, &send_d);
+        }
         SC808_LANE(SC808_SD, sdc);
         SC808_LANE(SC808_LT, ltc);
         SC808_LANE(SC808_MT, mtc);

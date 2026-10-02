@@ -593,6 +593,61 @@ int main(int argc, char **argv)
            "dly_bpm is the host's, not the panel's", NULL);
     }
 
+    /* ---- 12b. the Punch kick (local addition, sc808_bd_punch.h) ---- */
+    printf("\nPunch kick\n");
+    {
+        fresh(api, &inst);
+        char v[32], d[64];
+        ok(api->get_param(inst, "bd_model", v, sizeof(v)) > 0 && atoi(v) == 0,
+           "bd_model exists and defaults to the 808 circuit", v);
+        note_on(api, inst, 36, 127);
+        const int k808 = render_peak(api, inst, 90);
+
+        fresh(api, &inst);
+        api->set_param(inst, "bd_model", "1");
+        note_on(api, inst, 36, 127);
+        const int punch = render_peak(api, inst, 90);
+        snprintf(d, sizeof(d), "808 %d, punch %d", k808, punch);
+        ok(punch > 0, "the Punch model sounds", d);
+        ok(punch != k808, "and it is not the circuit kick", d);
+        ok(punch < k808 * 2 && punch * 2 > k808,
+           "at a level within 6 dB of the circuit kick", d);
+
+        /* Every Punch control at its top, twice in a row so the second hit
+         * lands on the first one's tail: the retrigger path and the voice's
+         * own ceiling. */
+        api->set_param(inst, "bd_pitch", "127");
+        api->set_param(inst, "bd_harm", "127");
+        api->set_param(inst, "bd_pulse", "127");
+        api->set_param(inst, "bd_noise", "127");
+        api->set_param(inst, "bd_gate", "127");
+        api->set_param(inst, "bd_comp", "127");
+        api->set_param(inst, "bd_attack", "127");
+        api->set_param(inst, "bd_tone", "127");
+        note_on(api, inst, 36, 127);
+        render_peak(api, inst, 20);
+        note_on(api, inst, 36, 127);
+        const int hot = render_peak(api, inst, 200);
+        snprintf(d, sizeof(d), "peak %d", hot);
+        ok(hot > 0 && hot <= 32767, "every Punch control at maximum stays in range", d);
+
+        /* A state blob from before the model existed is shorter than the
+         * tables now are. The appended tail must keep its defaults — an old
+         * project must come back as the 808 kick it was saved with. */
+        fresh(api, &inst);
+        api->set_param(inst, "bd_model", "1");
+        api->set_param(inst, "bd_pitch", "5");
+        api->set_param(inst, "state",
+                       "{\"v\":4,\"pots\":[64,24,87,42],\"enums\":[0,0]}");
+        api->get_param(inst, "bd_tune", v, sizeof(v));
+        ok(atoi(v) == 64, "a pre-Punch blob still applies", v);
+        fresh(api, &inst);
+        api->set_param(inst, "state",
+                       "{\"v\":4,\"pots\":[64,24,87,42],\"enums\":[0,0]}");
+        api->get_param(inst, "bd_model", v, sizeof(v));
+        ok(atoi(v) == 0, "and loads as the 808 circuit", v);
+    }
+
     /* ---- 13. nothing pathological in the output ---- */
     printf("\noutput sanity\n");
     {

@@ -1270,6 +1270,72 @@
    "min": 0,
    "max": 65535,
    "default": 0
+  },
+  {
+   "key": "bd_pitch",
+   "name": "BD Pitch",
+   "type": "int",
+   "min": 0,
+   "max": 127,
+   "default": 72
+  },
+  {
+   "key": "bd_pdecay",
+   "name": "BD Pitch Dec",
+   "type": "int",
+   "min": 0,
+   "max": 127,
+   "default": 54
+  },
+  {
+   "key": "bd_harm",
+   "name": "BD Harmonics",
+   "type": "int",
+   "min": 0,
+   "max": 127,
+   "default": 32
+  },
+  {
+   "key": "bd_pulse",
+   "name": "BD Pulse",
+   "type": "int",
+   "min": 0,
+   "max": 127,
+   "default": 38
+  },
+  {
+   "key": "bd_noise",
+   "name": "BD Noise",
+   "type": "int",
+   "min": 0,
+   "max": 127,
+   "default": 13
+  },
+  {
+   "key": "bd_gate",
+   "name": "BD Gate",
+   "type": "int",
+   "min": 0,
+   "max": 127,
+   "default": 10
+  },
+  {
+   "key": "bd_comp",
+   "name": "BD Comp",
+   "type": "int",
+   "min": 0,
+   "max": 127,
+   "default": 51
+  },
+  {
+   "key": "bd_model",
+   "name": "BD Model",
+   "type": "enum",
+   "options": [
+    "808",
+    "Punch"
+   ],
+   "default": 0
   }
  ],
  "ui_hierarchy": {
@@ -1319,6 +1385,53 @@
     ],
     "note": 36,
     "role": "kick"
+   },
+   "bdp": {
+    "name": "Punch Kick",
+    "knobs": [
+     "bd_pitch",
+     "bd_pdecay",
+     "bd_harm",
+     "bd_pulse",
+     "bd_noise",
+     "bd_gate",
+     "bd_comp",
+     "bd_model"
+    ],
+    "params": [
+     {
+      "key": "bd_pitch",
+      "label": "Pitch"
+     },
+     {
+      "key": "bd_pdecay",
+      "label": "Pitch Dec"
+     },
+     {
+      "key": "bd_harm",
+      "label": "Harmonics"
+     },
+     {
+      "key": "bd_pulse",
+      "label": "Pulse"
+     },
+     {
+      "key": "bd_noise",
+      "label": "Noise"
+     },
+     {
+      "key": "bd_gate",
+      "label": "Gate"
+     },
+     {
+      "key": "bd_comp",
+      "label": "Comp"
+     },
+     {
+      "key": "bd_model",
+      "label": "Model"
+     }
+    ]
    },
    "sd": {
     "name": "Snare",
@@ -2067,6 +2180,10 @@
      {
       "level": "bd",
       "label": "Bass Drum"
+     },
+     {
+      "level": "bdp",
+      "label": "Punch Kick"
      },
      {
       "level": "sd",

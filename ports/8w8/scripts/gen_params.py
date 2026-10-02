@@ -339,6 +339,29 @@ FX_PAGES = [
     ]),
 ]
 
+# ---- LOCAL ADDITION (not in schwung-8W8): the Punch kick ------------------
+#
+# A second bass drum model, see src/dsp/sc808_bd_punch.h. bd_model picks it;
+# the default is the 808 circuit, so every saved project sounds as it did.
+# Tune, Attack, Decay and Tone are shared with the circuit kick — these are
+# only the controls the 808 kick has no equivalent for.
+#
+# The enum is NOT called bd_engine: that key belongs to the v1 state blobs
+# (kV1EnumKeys), and reusing it would land an old patch's value in here.
+#
+# Registered LAST, after ui_focus and mutes, so no existing parameter moves:
+# not in the state blob and not in the VST parameter list MPC projects store.
+PUNCH_PAGE = ("bdp", "Punch Kick", [
+    PV("bd_pitch",  "Pitch",     0.0,   60.0, LIN, 34.0),    # semitones of sweep
+    PV("bd_pdecay", "Pitch Dec", 0.004, 0.4,  EXP, 0.028),   # seconds
+    PV("bd_harm",   "Harmonics", 0.0,   1.0,  LIN, 0.25),
+    PV("bd_pulse",  "Pulse",     0.0,   1.0,  LIN, 0.30),
+    PV("bd_noise",  "Noise",     0.0,   1.0,  LIN, 0.10),
+    PV("bd_gate",   "Gate",      0.0,   0.25, LIN, 0.02),    # seconds held at full
+    PV("bd_comp",   "Comp",      0.0,   1.0,  LIN, 0.40),
+    E("bd_model",   "Model", ["808", "Punch"], 0),
+])
+
 GLOBALS = [
     E("master_dist", "Master Dist", ["Off"] + DIST),
     P("master_drive", "Master Drive", 0.0, 10.0, LIN, 0),   # 0 = bypass, see DRIVE
@@ -472,6 +495,15 @@ for pid, label, params in PAGES:
                    "params": [{"key": p["key"], "label": p["name"]}
                               for p in full]}
     root.append({"level": pid, "label": label})
+    # The Punch kick's page sits straight after the bass drum's. It carries
+    # no note: the pad is the bass drum's.
+    if pid == "bd":
+        ppid, plabel, pparams = PUNCH_PAGE
+        levels[ppid] = {"name": plabel,
+                        "knobs": [p["key"] for p in pparams],
+                        "params": [{"key": p["key"], "label": p["name"]}
+                                   for p in pparams]}
+        root.append({"level": ppid, "label": plabel})
 
 for pid, label, params in FX_PAGES:
     levels[pid] = {"name": label,
@@ -495,6 +527,10 @@ cp.append({"key": "ui_focus", "name": "Focus", "type": "int",
            "min": 0, "max": 16, "default": 0})       # 16 == Master
 cp.append({"key": "mutes", "name": "Mutes", "type": "int",
            "min": 0, "max": 65535, "default": 0})    # sixteen lanes, sixteen bits
+
+# The Punch kick, appended after everything that already existed.
+for p in PUNCH_PAGE[2]:
+    register(p)
 
 # The point of the prefixes is that no two entries in the flat picker read the
 # same. Assert it rather than trusting it: 9W9 verified this by hand and its
