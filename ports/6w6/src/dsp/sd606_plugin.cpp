@@ -373,6 +373,22 @@ static void render_block(void *_instance, int16_t *_out_lr, const int _frames)
     }
 }
 
+/* ---- STEMS (mpc_pads_engine.c, the MPC adapter, records them) --------- */
+
+static const char *const kStemName[SD606_NUM_VOICES] = { "BD", "SD", "LT", "HT", "CH", "OH", "CY", "CP" };
+static const char *const kStemInfo[SD606_NUM_VOICES] = {
+    "bass drum", "snare", "low tom", "high tom", "closed hat", "open hat", "cymbal", "hand clap"
+};
+extern "C" const char *trstem_kit(void) { return "6W6"; }
+extern "C" int trstem_voices(void) { return SD606_NUM_VOICES; }
+extern "C" const char *trstem_voice(int v) { return v >= 0 && v < SD606_NUM_VOICES ? kStemName[v] : "?"; }
+extern "C" const char *trstem_voice_info(int v) { return v >= 0 && v < SD606_NUM_VOICES ? kStemInfo[v] : ""; }
+extern "C" void trstem_attach(void *_instance, float *buf)
+{
+    sd606_instance_t *inst = (sd606_instance_t *)_instance;
+    if(inst && inst->engine) sd606_set_stem(inst->engine, buf);
+}
+
 static plugin_api_v2_t g_api;
 
 extern "C" plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *_host)

@@ -2,7 +2,7 @@
   "name": "6W6",
   "vendor": "athousanddetails",
   "uid": "T6W6",
-  "version": 1000,
+  "version": 1200,
   "so": "tr6w6.so",
   "art": "html",
   "build": {
@@ -21,9 +21,14 @@
       "-std=gnu++14"
     ],
     "libs": [
-      "-lm"
+      "-lm",
+      "-lpthread"
     ]
   },
   "layout": "layout.conf",
-  "params": "module.mpc.json"
+  "params": "module.mpc.json",
+  "defines": {
+    "HAS_TRANSPORT": 1,
+    "HAS_LFO_BPM": 1
+  }
 }

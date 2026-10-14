@@ -176,6 +176,9 @@ struct sd606_engine {
     TomVoice        lt, ht;
     Sd606MetalVoice ch, oh, cy;   /* forked: see sd606_metal_voice.h */
     Sd606ClapVoice  cp;   /* forked: see sd606_clap_voice.h */
+    /* STEMS (local addition): see sd606_set_stem in the header */
+    float *stem;
+    int    stem_i;
 };
 
 static void sd606_fx_sync(sd606_engine_t *e);
@@ -402,6 +405,7 @@ static inline float voice_sample(sd606_engine *e, int v, float raw)
     do { if(e->rt[vid].choke_gain > 0.0f) {                                   \
              const float sv = voice_sample(e, vid, (expr));                   \
              mix   += sv;                                                     \
+             if(e->stem) e->stem[(vid) * SD606_STEM_FRAMES + e->stem_i] = sv; \
              /* post-fader sends: what you hear is what you send */           \
              send_r += sv * e->potv[e->slot[vid].rev];                        \
              send_d += sv * e->potv[e->slot[vid].dly];                        \
@@ -418,6 +422,7 @@ void sd606_render(sd606_engine_t *e, float *out, int frames)
     for(int i = 0; i < frames; ++i)
     {
         float mix = 0.0f, send_r = 0.0f, send_d = 0.0f;
+        e->stem_i = i;
         SD606_LANE(SD606_BD, e->bd.process());
         SD606_LANE(SD606_SD, e->sd.process());
         SD606_LANE(SD606_LT, e->lt.process());
@@ -436,8 +441,10 @@ void sd606_render(sd606_engine_t *e, float *out, int frames)
          * still ticked, not branched around: a send turned down while the
          * tail is ringing must let that tail finish, and a branch on
          * "input == 0" would chop it off. */
-        mix += sd606_verb_tick(&e->verb, send_r);
-        mix += sd606_dly_tick(&e->dly, send_d, e->sample_rate);
+        const float wet_r = sd606_verb_tick(&e->verb, send_r);
+        const float wet_d = sd606_dly_tick(&e->dly, send_d, e->sample_rate);
+        mix += wet_r;
+        mix += wet_d;
 
         /* Master stage. Option 0 is Off, so the kit can be left alone. */
         if(mdist > 0 && mpot > 0)
@@ -450,13 +457,27 @@ void sd606_render(sd606_engine_t *e, float *out, int frames)
         /* Glue after the distortion, before the volume -- and skipped
          * entirely at zero, which is the default, so it cannot colour a kit
          * nobody asked it to touch. */
-        if(comp > 0.001f) mix = sd606_glue_tick(&e->glue, mix, comp, e->sample_rate);
+        float glue_g = 1.0f;
+        if(comp > 0.001f)
+        {
+            const float pre = mix;
+            mix = sd606_glue_tick(&e->glue, mix, comp, e->sample_rate);
+            if(fabsf(pre) > 1e-9f) glue_g = mix / pre;
+        }
         mix *= vol;
+        if(e->stem)   /* STEMS: the returns, the compressor's gain on this frame, VOLUME */
+        {
+            e->stem[SD606_NUM_VOICES * SD606_STEM_FRAMES + i]       = wet_r + wet_d;
+            e->stem[(SD606_NUM_VOICES + 1) * SD606_STEM_FRAMES + i] = glue_g;
+            e->stem[(SD606_NUM_VOICES + 2) * SD606_STEM_FRAMES + i] = vol;
+        }
 
         if(!(mix > -8.0f && mix < 8.0f)) mix = 0.0f;   /* also catches NaN */
         out[i] = mix;
     }
 }
+
+void sd606_set_stem(sd606_engine_t *e, float *buf) { e->stem = buf; }
 
 /* ---- parameters ------------------------------------------------------- */
 
