@@ -1,0 +1,78 @@
+diff -ruN a/sd606_engine.cpp b/sd606_engine.cpp
+--- a/sd606_engine.cpp	2026-10-14 06:41:28.509953348 +0200
++++ b/sd606_engine.cpp	2026-10-14 06:41:28.553155976 +0200
+@@ -141,6 +141,8 @@
+ } /* namespace */
+ 
+ struct sd606_engine {
++    float *tap; int tap_i;           /* TR-MPC patch: per-voice tap, see the header */
++    int tap_live[SD606_NUM_VOICES], tap_quiet[SD606_NUM_VOICES];
+     float sample_rate;
+ 
+     int   pot[SD606_NUM_POTS];       /* raw 0..127, the stored form */
+@@ -298,6 +300,7 @@
+     if(voice < 0 || voice >= SD606_NUM_VOICES) return;
+     if(velocity <= 0) return;                       /* note-off: drums are one-shots */
+     if(e->mutes & (1u << voice)) return;
++    e->tap_live[voice] = 1; e->tap_quiet[voice] = 0;   /* TR-MPC patch */
+ 
+     /*
+      * How loud this hit is, from its velocity.
+@@ -402,9 +405,14 @@
+  * gain also means a muted lane keeps rendering until its fade completes, then
+  * disappears. */
+ #define SD606_LANE(vid, expr)                                                 \
+-    do { if(e->rt[vid].choke_gain > 0.0f) {                                   \
++    do { if(e->rt[vid].choke_gain > 0.0f && (!e->tap || e->tap_live[vid])) {  \
+              const float sv = voice_sample(e, vid, (expr));                   \
+              mix   += sv;                                                     \
++             if(e->tap) {                                                     \
++                 e->tap[(vid) * SD606_TAP_FRAMES + e->tap_i] = sv;            \
++                 if(sv > 1e-6f || sv < -1e-6f) e->tap_quiet[vid] = 0;         \
++                 else if(++e->tap_quiet[vid] > 2205) e->tap_live[vid] = 0;    \
++             }                                                                \
+              if(e->stem) e->stem[(vid) * SD606_STEM_FRAMES + e->stem_i] = sv; \
+              /* post-fader sends: what you hear is what you send */           \
+              send_r += sv * e->potv[e->slot[vid].rev];                        \
+@@ -422,6 +430,7 @@
+     for(int i = 0; i < frames; ++i)
+     {
+         float mix = 0.0f, send_r = 0.0f, send_d = 0.0f;
++        e->tap_i = i;
+         e->stem_i = i;
+         SD606_LANE(SD606_BD, e->bd.process());
+         SD606_LANE(SD606_SD, e->sd.process());
+@@ -432,6 +441,8 @@
+         SD606_LANE(SD606_CY, e->cy.process());
+         SD606_LANE(SD606_CP, e->cp.process());
+ 
++        if(e->tap) { out[i] = 0.0f; continue; }   /* TR-MPC patch: voices only */
++
+         /* The wet returns BEFORE the master distortion, so that stage works
+          * on the whole picture rather than just the dry kit.
+          *
+@@ -479,6 +490,8 @@
+ 
+ void sd606_set_stem(sd606_engine_t *e, float *buf) { e->stem = buf; }
+ 
++void sd606_set_tap(sd606_engine_t *e, float *tap) { e->tap = tap; }
++
+ /* ---- parameters ------------------------------------------------------- */
+ 
+ /* The FX structs hold engineering values, not pot positions, so a write to
+diff -ruN a/sd606_engine.h b/sd606_engine.h
+--- a/sd606_engine.h	2026-10-14 06:41:28.510007116 +0200
++++ b/sd606_engine.h	2026-10-14 06:41:28.553661144 +0200
+@@ -43,6 +43,12 @@
+ /* Mono float render. The plugin wrapper does the int16 stereo interleave. */
+ void  sd606_render(sd606_engine_t *e, float *out, int frames);
+ 
++/* TR-MPC patch: per-voice tap. With a tap set (NUM_VOICES x sd606_TAP_FRAMES floats, zeroed by the caller before each
++ * render) render() writes each voice's post-fader dry sample there and skips the reverb, delay, master stage and
++ * volume; the output stays silent. */
++#define SD606_TAP_FRAMES 128
++void sd606_set_tap(sd606_engine_t *e, float *tap);
++
+ /* STEMS (local addition, not part of schwung-6W6). With a buffer set ((SD606_NUM_VOICES + 3) x SD606_STEM_FRAMES
+  * floats) render() also writes, for frame i: row v = voice v as it goes into the mix (post-fader, dry; nothing when
+  * the voice is silent, so the caller clears those rows), row SD606_NUM_VOICES = the reverb and delay returns, the next

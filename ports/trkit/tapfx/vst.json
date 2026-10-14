@@ -1,0 +1,29 @@
+{
+ "name": "TR-MPC Tap FX",
+ "vendor": "sd88me",
+ "uid": "TRTf",
+ "version": 1000,
+ "so": "trmpc_tapfx.so",
+ "params": "params.json",
+ "effect": true,
+ "defines": {
+  "MODULE_SUBDIR": "\"engine\""
+ },
+ "build": {
+  "root": "../..",
+  "sources": [
+   "trkit/tapfx/tap_engine.cpp"
+  ],
+  "cflags": [
+   "-Itrkit/src",
+   "-DTAP_FX=1",
+   "-std=gnu++14",
+   "-O2"
+  ],
+  "libs": [
+   "-ldl"
+  ]
+ },
+ "layout": "layout.conf",
+ "art": "html"
+}

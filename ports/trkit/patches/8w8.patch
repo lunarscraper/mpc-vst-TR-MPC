@@ -1,0 +1,95 @@
+diff -ruN a/sc808_engine.cpp b/sc808_engine.cpp
+--- a/sc808_engine.cpp	2026-10-14 06:41:28.570073099 +0200
++++ b/sc808_engine.cpp	2026-10-14 06:41:28.604513059 +0200
+@@ -241,6 +241,8 @@
+ } /* namespace */
+ 
+ struct sc808_engine {
++    float *tap; int tap_i;           /* TR-MPC patch: per-voice tap, see the header */
++    float crush_master_r[SC808_CRUSH_STATE];
+     float sample_rate;
+ 
+     int   pot[SC808_NUM_POTS];       /* raw 0..127, the stored form   */
+@@ -757,6 +759,7 @@
+ {
+     const float sv = voice_sample(e, v, raw);
+     *mix += sv;
++    if(e->tap) e->tap[v * SC808_TAP_FRAMES + e->tap_i] = sv;
+     if(e->stem) e->stem[v * SC808_STEM_FRAMES + e->stem_i] = sv;   /* STEMS */
+     const VoiceSlots &s = e->slot[v];
+     if(s.rev >= 0) *send_r += sv * e->potv[s.rev];
+@@ -782,6 +785,7 @@
+     for(int i = 0; i < frames; ++i)
+     {
+         float mix = 0.0f, send_r = 0.0f, send_d = 0.0f;
++        e->tap_i = i;
+         e->stem_i = i;
+         /* The kick lane has two models. Only the selected one is ever
+          * triggered, but the other may still be ringing out after a switch,
+@@ -823,6 +827,8 @@
+         SC808_METAL(SC808_CY, cyc);
+ #undef SC808_METAL
+ 
++        if(e->tap) { out[i] = 0.0f; continue; }   /* TR-MPC patch: voices only */
++
+         /*
+          * The wet returns join the bus BEFORE the master stages, so master
+          * distortion and the glue work on the whole picture rather than on a
+@@ -866,6 +872,38 @@
+ 
+ void sc808_set_stem(sc808_engine_t *e, float *buf) { e->stem = buf; }
+ 
++void sc808_set_tap(sc808_engine_t *e, float *tap) { e->tap = tap; }
++
++/* TR-MPC patch: the post-voice stage (reverb, delay, master distortion, glue, volume) run once on summed buses. */
++void sc808_fx_stereo(sc808_engine_t *e, const float *dl, const float *dr, const float *send_r, const float *send_d,
++                     float *ol, float *orr, int frames)
++{
++    const int   mdist  = e->env[e->e_master_dist];
++    const float mdrive = e->potv[e->p_master_drive];
++    const float vol    = e->potv[e->p_volume];
++    const float comp   = e->potv[e->p_comp];
++    for(int i = 0; i < frames; ++i)
++    {
++        const float wet = sc808_verb_tick(&e->verb, send_r[i]) + sc808_dly_tick(&e->dly, send_d[i], e->sample_rate);
++        float l = dl[i] + wet, r = dr[i] + wet;
++        if(mdist > 0)
++        {
++            l = sc808_shape_st(l, mdrive, mdist - 1, e->crush_master);
++            r = sc808_shape_st(r, mdrive, mdist - 1, e->crush_master_r);
++        }
++        if(comp > 0.001f)
++        {
++            const float m = 0.5f * (l + r);
++            const float g = sc808_glue_tick(&e->glue, m, comp, e->sample_rate);
++            const float k = fabsf(m) > 1e-9f ? g / m : 1.0f;
++            l *= k; r *= k;
++        }
++        l *= vol; r *= vol;
++        ol[i]  = (l > -8.0f && l < 8.0f) ? l : 0.0f;
++        orr[i] = (r > -8.0f && r < 8.0f) ? r : 0.0f;
++    }
++}
++
+ /* ---- parameters ------------------------------------------------------- */
+ 
+ int sc808_set_param(sc808_engine_t *e, const char *key, const char *val)
+diff -ruN a/sc808_engine.h b/sc808_engine.h
+--- a/sc808_engine.h	2026-10-14 06:41:28.570248898 +0200
++++ b/sc808_engine.h	2026-10-14 06:41:28.604905599 +0200
+@@ -66,6 +66,15 @@
+ /* Mono float render. The plugin wrapper does the int16 stereo interleave. */
+ void  sc808_render(sc808_engine_t *e, float *out, int frames);
+ 
++/* TR-MPC patch: per-voice tap. With a tap set (NUM_VOICES x sc808_TAP_FRAMES floats, zeroed by the caller before each
++ * render) render() writes each voice's post-fader dry sample there and skips the reverb, delay, master stage and
++ * volume; the output stays silent. */
++#define SC808_TAP_FRAMES 128
++void sc808_set_tap(sc808_engine_t *e, float *tap);
++/* The post-voice stage on summed buses (dry L/R, reverb and delay send buses), as render() does it per kit. */
++void sc808_fx_stereo(sc808_engine_t *e, const float *dl, const float *dr, const float *send_r, const float *send_d,
++                     float *ol, float *orr, int frames);
++
+ /* STEMS (local addition, not part of schwung-8W8). With a buffer set ((SC808_NUM_VOICES + 3) x SC808_STEM_FRAMES
+  * floats) render() also writes, for frame i: row v = voice v as it goes into the mix (post-fader, dry; nothing when
+  * the voice is silent, so the caller clears those rows), row SC808_NUM_VOICES = the reverb and delay returns, the next

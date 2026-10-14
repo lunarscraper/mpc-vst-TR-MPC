@@ -1,0 +1,5 @@
+/* TR-MPC rack skin: the faceplates are drawn in images/rack_*.svg; the frames only supply each module's title. */
+.frame-border { fill: none; stroke: none; }
+.frame-rule { stroke: #5ec2b7; stroke-opacity: 0.0; }
+.frame-title { font-size: 21px; letter-spacing: 0.14em; fill: #e8e9ec; }
+.text { fill: #9a9ea8; }

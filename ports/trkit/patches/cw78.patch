@@ -1,0 +1,95 @@
+diff -ruN a/cr78_engine.cpp b/cr78_engine.cpp
+--- a/cr78_engine.cpp	2026-10-14 06:41:28.622281743 +0200
++++ b/cr78_engine.cpp	2026-10-14 06:41:28.661073890 +0200
+@@ -237,6 +237,8 @@
+ } /* namespace */
+ 
+ struct cr78_engine {
++    float *tap; int tap_i;           /* TR-MPC patch: per-voice tap, see the header */
++    float crush_master_r[CR78_CRUSH_STATE];
+     float sample_rate;
+ 
+     int   pot[CR78_NUM_POTS];        /* raw 0..127, the stored form   */
+@@ -661,6 +663,7 @@
+ {
+     const float sv = voice_sample(e, v, raw);
+     *mix += sv;
++    if(e->tap) e->tap[v * CR78_TAP_FRAMES + e->tap_i] = sv;
+     if(e->stem) e->stem[v * CR78_STEM_FRAMES + e->stem_i] = sv;   /* STEMS */
+     const VoiceSlots &s = e->slot[v];
+     if(s.rev >= 0) *send_r += sv * e->potv[s.rev];
+@@ -691,6 +694,7 @@
+     for(int i = 0; i < frames; ++i)
+     {
+         float mix = 0.0f, send_r = 0.0f, send_d = 0.0f;
++        e->tap_i = i;
+         e->stem_i = i;
+ 
+         /*
+@@ -716,6 +720,8 @@
+         CR78_LANE (CR78_GU, guv);
+         CR78_LANE (CR78_MB, mbv);
+ 
++        if(e->tap) { out[i] = 0.0f; continue; }   /* TR-MPC patch: voices only */
++
+         /*
+          * The wet returns join the bus BEFORE the master stages, so master
+          * distortion and the glue work on the whole picture rather than on a
+@@ -759,6 +765,38 @@
+ 
+ void cr78_set_stem(cr78_engine_t *e, float *buf) { e->stem = buf; }
+ 
++void cr78_set_tap(cr78_engine_t *e, float *tap) { e->tap = tap; }
++
++/* TR-MPC patch: the post-voice stage (reverb, delay, master distortion, glue, volume) run once on summed buses. */
++void cr78_fx_stereo(cr78_engine_t *e, const float *dl, const float *dr, const float *send_r, const float *send_d,
++                     float *ol, float *orr, int frames)
++{
++    const int   mdist  = e->env[e->e_master_dist];
++    const float mdrive = e->potv[e->p_master_drive];
++    const float vol    = e->potv[e->p_volume];
++    const float comp   = e->potv[e->p_comp];
++    for(int i = 0; i < frames; ++i)
++    {
++        const float wet = cr78_verb_tick(&e->verb, send_r[i]) + cr78_dly_tick(&e->dly, send_d[i], e->sample_rate);
++        float l = dl[i] + wet, r = dr[i] + wet;
++        if(mdist > 0)
++        {
++            l = cr78_shape_st(l, mdrive, mdist - 1, e->crush_master);
++            r = cr78_shape_st(r, mdrive, mdist - 1, e->crush_master_r);
++        }
++        if(comp > 0.001f)
++        {
++            const float m = 0.5f * (l + r);
++            const float g = cr78_glue_tick(&e->glue, m, comp, e->sample_rate);
++            const float k = fabsf(m) > 1e-9f ? g / m : 1.0f;
++            l *= k; r *= k;
++        }
++        l *= vol; r *= vol;
++        ol[i]  = (l > -8.0f && l < 8.0f) ? l : 0.0f;
++        orr[i] = (r > -8.0f && r < 8.0f) ? r : 0.0f;
++    }
++}
++
+ /* ---- parameters ------------------------------------------------------- */
+ 
+ int cr78_set_param(cr78_engine_t *e, const char *key, const char *val)
+diff -ruN a/cr78_engine.h b/cr78_engine.h
+--- a/cr78_engine.h	2026-10-14 06:41:28.622324622 +0200
++++ b/cr78_engine.h	2026-10-14 06:41:28.661465787 +0200
+@@ -60,6 +60,15 @@
+ /* Mono float render. The plugin wrapper does the int16 stereo interleave. */
+ void  cr78_render(cr78_engine_t *e, float *out, int frames);
+ 
++/* TR-MPC patch: per-voice tap. With a tap set (NUM_VOICES x cr78_TAP_FRAMES floats, zeroed by the caller before each
++ * render) render() writes each voice's post-fader dry sample there and skips the reverb, delay, master stage and
++ * volume; the output stays silent. */
++#define CR78_TAP_FRAMES 128
++void cr78_set_tap(cr78_engine_t *e, float *tap);
++/* The post-voice stage on summed buses (dry L/R, reverb and delay send buses), as render() does it per kit. */
++void cr78_fx_stereo(cr78_engine_t *e, const float *dl, const float *dr, const float *send_r, const float *send_d,
++                     float *ol, float *orr, int frames);
++
+ /* STEMS (local addition, not part of schwung-cw-78). With a buffer set ((CR78_NUM_VOICES + 3) x CR78_STEM_FRAMES
+  * floats) render() also writes, for frame i: row v = voice v as it goes into the mix (post-fader, dry; nothing when
+  * the voice is silent, so the caller clears those rows), row CR78_NUM_VOICES = the reverb and delay returns, the next

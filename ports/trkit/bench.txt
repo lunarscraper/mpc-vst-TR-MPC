@@ -1,0 +1,1 @@
+{"plugin":"/tmp/trmpc.so","instrument":1,"open_ms":2.0,"p99_pct":24.8,"max_pct":27.4,"threads_pct":0.0,"verdict":"WARN"}
