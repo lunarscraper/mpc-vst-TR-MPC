@@ -5,7 +5,7 @@
 set -euo pipefail
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 PLUG="${MPC_VST_PLUGINS:-$SRC/../mpc-vst-plugins}"
-W=/tmp/trbuild.$(date +%s); mkdir -p $W   # fresh dir each run: docker leaves root-owned files behind
+W=${TRBUILD_DIR:-$HOME/.cache/trbuild}/run.$(date +%s); mkdir -p $W   # fresh dir each run: docker leaves root-owned files behind
 cp -r "$PLUG" $W/p
 mkdir $W/t; tar -C "$SRC" --exclude=_build --exclude=.git --exclude='ports/*/build' -cf - . | tar -C $W/t -xf -
 find $W/p -type f \( -name '*.py' -o -name '*.sh' \) -exec sed -i 's/\r$//' {} +

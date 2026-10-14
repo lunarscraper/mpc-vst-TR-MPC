@@ -31,6 +31,11 @@ def main():
     pages = re.search(r"static const char (\w+_ui_(?:pages|hierarchy)_json)\[\]", h).group(1)
     mod = json.load(open(a.module_json, encoding="utf-8"))
     mod["chain_params"] = json.loads(literal(h, chain))
+    # STEMS (ports/common/mpc_pads_engine.c answers these, not the kit): always the last two, so no index moves
+    mod["chain_params"] += [
+        {"key": "stems", "name": "Stems", "type": "enum", "options": ["OFF", "DRY", "AS HEARD"], "default": 0},
+        {"key": "stems_status", "name": "Stems Status", "min": 0, "max": 0, "display": "string", "type": "readout"},
+    ]
     mod["ui_hierarchy"] = json.loads(literal(h, pages))
     json.dump(mod, open(a.o, "w", encoding="utf-8"), indent=1)
     print("%s: %d chain_params, levels: %s" % (a.o, len(mod["chain_params"]), list(mod["ui_hierarchy"].get("levels", {}))[:8]))
