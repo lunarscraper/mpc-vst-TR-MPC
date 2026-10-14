@@ -623,6 +623,25 @@ static void render_block(void *_instance, int16_t *_out_lr, const int _frames)
     }
 }
 
+/* ---- STEMS (mpc_pads_engine.c, the MPC adapter, records them) --------- */
+
+static const char *const kStemName[CR78_NUM_VOICES] = {
+    "BD", "SD", "RS", "HH", "CY", "MA", "CL", "HB", "LB", "LC", "CB", "TB", "GU", "MB"
+};
+static const char *const kStemInfo[CR78_NUM_VOICES] = {
+    "bass drum", "snare", "rim shot", "hi-hat", "cymbal", "maracas", "claves", "high bongo",
+    "low bongo", "low conga", "cowbell", "tambourine", "guiro", "metallic beat"
+};
+extern "C" const char *trstem_kit(void) { return "CW-78"; }
+extern "C" int trstem_voices(void) { return CR78_NUM_VOICES; }
+extern "C" const char *trstem_voice(int v) { return v >= 0 && v < CR78_NUM_VOICES ? kStemName[v] : "?"; }
+extern "C" const char *trstem_voice_info(int v) { return v >= 0 && v < CR78_NUM_VOICES ? kStemInfo[v] : ""; }
+extern "C" void trstem_attach(void *_instance, float *buf)
+{
+    cr78_instance_t *inst = (cr78_instance_t *)_instance;
+    if(inst && inst->engine) cr78_set_stem(inst->engine, buf);
+}
+
 static plugin_api_v2_t g_api;
 
 extern "C" plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *_host)

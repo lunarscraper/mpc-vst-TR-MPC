@@ -295,6 +295,9 @@ struct cr78_engine {
      * that correlation is audible.
      */
     NoiseSource noise;
+    /* STEMS (local addition): see cr78_set_stem in the header */
+    float *stem;
+    int    stem_i;
 };
 
 /*
@@ -658,6 +661,7 @@ static inline void cr78_add(cr78_engine *e, const int v, const float raw,
 {
     const float sv = voice_sample(e, v, raw);
     *mix += sv;
+    if(e->stem) e->stem[v * CR78_STEM_FRAMES + e->stem_i] = sv;   /* STEMS */
     const VoiceSlots &s = e->slot[v];
     if(s.rev >= 0) *send_r += sv * e->potv[s.rev];
     if(s.dly >= 0) *send_d += sv * e->potv[s.dly];
@@ -687,6 +691,7 @@ void cr78_render(cr78_engine_t *e, float *out, int frames)
     for(int i = 0; i < frames; ++i)
     {
         float mix = 0.0f, send_r = 0.0f, send_d = 0.0f;
+        e->stem_i = i;
 
         /*
          * The shared noise source ticks ONCE per sample, always — one Q533 on
@@ -722,21 +727,37 @@ void cr78_render(cr78_engine_t *e, float *out, int frames)
          * from a bypass — it comes from a silent-state tick fed exactly 0.0
          * returning exactly 0.0, which golden_check is what proves.
          */
-        mix += cr78_verb_tick(&e->verb, send_r);
-        mix += cr78_dly_tick(&e->dly, send_d, e->sample_rate);
+        const float wet_r = cr78_verb_tick(&e->verb, send_r);
+        const float wet_d = cr78_dly_tick(&e->dly, send_d, e->sample_rate);
+        mix += wet_r;
+        mix += wet_d;
 
         /* Master stage. Option 0 is Off, so the kit can be left alone. */
         if(mdist > 0) mix = cr78_shape_st(mix, mdrive, mdist - 1, e->crush_master);
         /* Glue after the distortion, before the volume — and skipped entirely
          * at zero, which is the default, so it cannot colour a kit nobody
          * asked it to touch. */
-        if(comp > 0.001f) mix = cr78_glue_tick(&e->glue, mix, comp, e->sample_rate);
+        float glue_g = 1.0f;
+        if(comp > 0.001f)
+        {
+            const float pre = mix;
+            mix = cr78_glue_tick(&e->glue, mix, comp, e->sample_rate);
+            if(fabsf(pre) > 1e-9f) glue_g = mix / pre;
+        }
         mix *= vol;
+        if(e->stem)   /* STEMS: the returns, the compressor's gain on this frame, VOLUME */
+        {
+            e->stem[CR78_NUM_VOICES * CR78_STEM_FRAMES + i]       = wet_r + wet_d;
+            e->stem[(CR78_NUM_VOICES + 1) * CR78_STEM_FRAMES + i] = glue_g;
+            e->stem[(CR78_NUM_VOICES + 2) * CR78_STEM_FRAMES + i] = vol;
+        }
 
         if(!(mix > -8.0f && mix < 8.0f)) mix = 0.0f;   /* also catches NaN */
         out[i] = mix;
     }
 }
+
+void cr78_set_stem(cr78_engine_t *e, float *buf) { e->stem = buf; }
 
 /* ---- parameters ------------------------------------------------------- */
 

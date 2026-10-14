@@ -60,6 +60,13 @@ void  cr78_trigger(cr78_engine_t *e, int voice, int velocity);
 /* Mono float render. The plugin wrapper does the int16 stereo interleave. */
 void  cr78_render(cr78_engine_t *e, float *out, int frames);
 
+/* STEMS (local addition, not part of schwung-cw-78). With a buffer set ((CR78_NUM_VOICES + 3) x CR78_STEM_FRAMES
+ * floats) render() also writes, for frame i: row v = voice v as it goes into the mix (post-fader, dry; nothing when
+ * the voice is silent, so the caller clears those rows), row CR78_NUM_VOICES = the reverb and delay returns, the next
+ * row the master compressor's gain (1 when off), the last VOLUME. The output itself is unchanged. NULL: off. */
+#define CR78_STEM_FRAMES 128
+void  cr78_set_stem(cr78_engine_t *e, float *buf);
+
 /* Both return 1 on a recognised key, 0 otherwise. */
 int   cr78_set_param(cr78_engine_t *e, const char *key, const char *val);
 int   cr78_get_param(cr78_engine_t *e, const char *key, char *buf, int len);
