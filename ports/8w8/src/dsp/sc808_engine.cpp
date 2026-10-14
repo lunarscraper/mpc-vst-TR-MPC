@@ -282,6 +282,9 @@ struct sc808_engine {
 
     CircuitBassDrum bdc;   /* the bridged-T circuit   */
     PunchKick       bdp;   /* bd_model == 1: pitch-envelope kick */
+    /* STEMS (local addition): see sc808_set_stem in the header */
+    float          *stem;
+    int             stem_i;
     CircuitSnare    sdc;   /* two bridged-T shells    */
     ClapCircuit     cpc;   /* burst, tail, 874 Hz MFB */
     /* Six copies of one channel, three struck as toms and three as
@@ -754,6 +757,7 @@ static inline void sc808_add(sc808_engine *e, const int v, const float raw,
 {
     const float sv = voice_sample(e, v, raw);
     *mix += sv;
+    if(e->stem) e->stem[v * SC808_STEM_FRAMES + e->stem_i] = sv;   /* STEMS */
     const VoiceSlots &s = e->slot[v];
     if(s.rev >= 0) *send_r += sv * e->potv[s.rev];
     if(s.dly >= 0) *send_d += sv * e->potv[s.dly];
@@ -778,6 +782,7 @@ void sc808_render(sc808_engine_t *e, float *out, int frames)
     for(int i = 0; i < frames; ++i)
     {
         float mix = 0.0f, send_r = 0.0f, send_d = 0.0f;
+        e->stem_i = i;
         /* The kick lane has two models. Only the selected one is ever
          * triggered, but the other may still be ringing out after a switch,
          * so both feed the ONE lane: one drive stage, one choke ramp. */
@@ -829,21 +834,37 @@ void sc808_render(sc808_engine_t *e, float *out, int frames)
          * from a bypass — it comes from a silent-state tick fed exactly 0.0
          * returning exactly 0.0, which golden_check is what proves.
          */
-        mix += sc808_verb_tick(&e->verb, send_r);
-        mix += sc808_dly_tick(&e->dly, send_d, e->sample_rate);
+        const float wet_r = sc808_verb_tick(&e->verb, send_r);
+        const float wet_d = sc808_dly_tick(&e->dly, send_d, e->sample_rate);
+        mix += wet_r;
+        mix += wet_d;
 
         /* Master stage. Option 0 is Off, so the kit can be left alone. */
         if(mdist > 0) mix = sc808_shape_st(mix, mdrive, mdist - 1, e->crush_master);
         /* Glue after the distortion, before the volume — and skipped entirely
          * at zero, which is the default, so it cannot colour a kit nobody
          * asked it to touch. */
-        if(comp > 0.001f) mix = sc808_glue_tick(&e->glue, mix, comp, e->sample_rate);
+        float glue_g = 1.0f;
+        if(comp > 0.001f)
+        {
+            const float pre = mix;
+            mix = sc808_glue_tick(&e->glue, mix, comp, e->sample_rate);
+            if(fabsf(pre) > 1e-9f) glue_g = mix / pre;
+        }
         mix *= vol;
+        if(e->stem)   /* STEMS: the returns, the compressor's gain on this frame, VOLUME */
+        {
+            e->stem[SC808_NUM_VOICES * SC808_STEM_FRAMES + i]       = wet_r + wet_d;
+            e->stem[(SC808_NUM_VOICES + 1) * SC808_STEM_FRAMES + i] = glue_g;
+            e->stem[(SC808_NUM_VOICES + 2) * SC808_STEM_FRAMES + i] = vol;
+        }
 
         if(!(mix > -8.0f && mix < 8.0f)) mix = 0.0f;   /* also catches NaN */
         out[i] = mix;
     }
 }
+
+void sc808_set_stem(sc808_engine_t *e, float *buf) { e->stem = buf; }
 
 /* ---- parameters ------------------------------------------------------- */
 

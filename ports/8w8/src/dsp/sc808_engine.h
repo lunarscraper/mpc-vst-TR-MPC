@@ -66,6 +66,13 @@ void  sc808_trigger(sc808_engine_t *e, int voice, int velocity);
 /* Mono float render. The plugin wrapper does the int16 stereo interleave. */
 void  sc808_render(sc808_engine_t *e, float *out, int frames);
 
+/* STEMS (local addition, not part of schwung-8W8). With a buffer set ((SC808_NUM_VOICES + 3) x SC808_STEM_FRAMES
+ * floats) render() also writes, for frame i: row v = voice v as it goes into the mix (post-fader, dry; nothing when
+ * the voice is silent, so the caller clears those rows), row SC808_NUM_VOICES = the reverb and delay returns, the next
+ * row the master compressor's gain (1 when off), the last VOLUME. The output itself is unchanged. NULL: off. */
+#define SC808_STEM_FRAMES 128
+void  sc808_set_stem(sc808_engine_t *e, float *buf);
+
 /* Both return 1 on a recognised key, 0 otherwise. */
 int   sc808_set_param(sc808_engine_t *e, const char *key, const char *val);
 int   sc808_get_param(sc808_engine_t *e, const char *key, char *buf, int len);

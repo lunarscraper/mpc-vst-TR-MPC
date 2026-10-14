@@ -416,6 +416,26 @@ static void render_block(void *_instance, int16_t *_out_lr, const int _frames)
     }
 }
 
+/* ---- STEMS (mpc_pads_engine.c, the MPC adapter, records them) --------- */
+
+static const char *const kStemName[SC808_NUM_VOICES] = {
+    "BD", "SD", "LT", "MT", "HT", "LC", "MC", "HC",
+    "RS", "CL", "MA", "CP", "CB", "CH", "OH", "CY"
+};
+static const char *const kStemInfo[SC808_NUM_VOICES] = {
+    "bass drum (808 or punch kick)", "snare", "low tom", "mid tom", "hi tom", "low conga", "mid conga", "hi conga",
+    "rim shot", "claves", "maracas", "hand clap", "cowbell", "closed hat", "open hat", "cymbal"
+};
+extern "C" const char *trstem_kit(void) { return "8W8"; }
+extern "C" int trstem_voices(void) { return SC808_NUM_VOICES; }
+extern "C" const char *trstem_voice(int v) { return v >= 0 && v < SC808_NUM_VOICES ? kStemName[v] : "?"; }
+extern "C" const char *trstem_voice_info(int v) { return v >= 0 && v < SC808_NUM_VOICES ? kStemInfo[v] : ""; }
+extern "C" void trstem_attach(void *_instance, float *buf)
+{
+    sc808_instance_t *inst = (sc808_instance_t *)_instance;
+    if(inst && inst->engine) sc808_set_stem(inst->engine, buf);
+}
+
 static plugin_api_v2_t g_api;
 
 extern "C" plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *_host)

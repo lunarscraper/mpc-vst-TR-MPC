@@ -1336,6 +1336,25 @@
     "Punch"
    ],
    "default": 0
+  },
+  {
+   "key": "stems",
+   "name": "Stems",
+   "type": "enum",
+   "options": [
+    "OFF",
+    "DRY",
+    "AS HEARD"
+   ],
+   "default": 0
+  },
+  {
+   "key": "stems_status",
+   "name": "Stems Status",
+   "min": 0,
+   "max": 0,
+   "display": "string",
+   "type": "readout"
   }
  ],
  "ui_hierarchy": {
