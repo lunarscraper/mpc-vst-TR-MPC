@@ -16,15 +16,15 @@ on:
 
 jobs:
   tr_6w6:
-    uses: sd88me/mpc-vst-plugins/.github/workflows/vst-release.yml@28f5ffd490d1b766b1f093017858db9c0ae47b40
+    uses: sd88me/mpc-vst-plugins/.github/workflows/vst-release.yml@e15ce126d3a523f76f9e099ce5bc9bdc542e0cc3
     permissions:
       contents: write
     with:
       tag: 6w6-vst-v${{ inputs.version }}
       version: ${{ inputs.version }}
-      tools_ref: 28f5ffd490d1b766b1f093017858db9c0ae47b40
+      tools_ref: e15ce126d3a523f76f9e099ce5bc9bdc542e0cc3
       vst_dir: ports/6w6
-      build: bash tools/build_ci.sh 6w6
+      build: SHADOW_SKIN_MPC_OS=2 bash tools/build_ci.sh 6w6
       host_test: bash tools/test_ci.sh 6w6
       plugin_id: tr-6w6
       license: GPL-3.0-only

@@ -1,0 +1,50 @@
+# Build TR-MPC into a DRAFT release (trmpc-vst-v<version>) with mpc-vst-plugins' shared workflow:
+# Actions -> "Release TR-MPC (draft)" -> Run workflow. Install that draft's zip on a device, smoke-test it, then publish
+# the draft (mpc-vst-plugins docs/RELEASING.md). dry_run builds the zip and skin previews as run artifacts only.
+name: Release TR-MPC (draft)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version, e.g. 1.0.0
+        required: true
+      dry_run:
+        description: Build only (zip + skin previews as run artifacts), no draft release
+        type: boolean
+        default: false
+
+jobs:
+  tr_mpc:
+    uses: sd88me/mpc-vst-plugins/.github/workflows/vst-release.yml@e15ce126d3a523f76f9e099ce5bc9bdc542e0cc3
+    permissions:
+      contents: write
+    with:
+      tag: trmpc-vst-v${{ inputs.version }}
+      version: ${{ inputs.version }}
+      tools_ref: e15ce126d3a523f76f9e099ce5bc9bdc542e0cc3
+      vst_dir: ports/trkit
+      build: bash tools/build_ci.sh trkit
+      host_test: bash tools/test_ci.sh trkit
+      plugin_id: tr-mpc
+      license: GPL-3.0-only
+      about: Modular 16-slot drum kit, any voice of 6W6, 8W8, CW-78 and 9W9 per slot, with one shared reverb, delay and master chain. Built on athousanddetails' Schwung drum machines.
+      extra: ports/9w9/src/samples:engine/samples
+      dry_run: ${{ inputs.dry_run }}
+
+  tr_mpc_tap_fx:
+    # The Tap FX plugin: puts TR-MPC's slots and its reverb/delay sends on their own MPC tracks. Ships as its own zip and draft.
+    uses: sd88me/mpc-vst-plugins/.github/workflows/vst-release.yml@e15ce126d3a523f76f9e099ce5bc9bdc542e0cc3
+    permissions:
+      contents: write
+    with:
+      tag: trmpc-tap-fx-vst-v${{ inputs.version }}
+      version: ${{ inputs.version }}
+      tools_ref: e15ce126d3a523f76f9e099ce5bc9bdc542e0cc3
+      vst_dir: ports/trkit/tapfx
+      build: bash tools/build_ci.sh trkit/tapfx
+      plugin_id: tr-mpc-tap-fx
+      license: GPL-3.0-only
+      requires: TR-MPC (same version) in the same project
+      about: TR-MPC Tap FX - sends any TR-MPC slot, or its reverb or delay send, out on its own MPC track so MPC's mixer, submixes and effects can process it.
+      dry_run: ${{ inputs.dry_run }}
