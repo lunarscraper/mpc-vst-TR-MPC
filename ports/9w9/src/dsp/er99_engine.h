@@ -163,6 +163,9 @@ typedef struct {
     /* decoded sample data, owned by the engine */
     float   *sample_data[ER99_NUM_SAMPLERS];
     uint32_t sample_len[ER99_NUM_SAMPLERS];
+
+    /* STEMS (local addition): see er99_engine_set_stem */
+    float   *stem;
 } er99_engine_t;
 
 /* Initialise with stock er-99 parameters. module_dir may be NULL, in which
@@ -175,6 +178,13 @@ void er99_engine_trigger(er99_engine_t *e, er99_trigger_t which, int velocity);
 
 /* Render mono into out (engine is mono; the plugin duplicates to stereo). */
 void er99_engine_render(er99_engine_t *e, float *out, int frames);
+
+/* STEMS (local addition, not part of schwung-9W9). With a buffer set ((ER99_NUM_TRIGGERS + 3) x ER99_STEM_FRAMES
+ * floats) render also writes, for frame n: row t = the voice of trigger t (ER99_CHH: the closed hat's sampler) as it
+ * goes into the mix (the sampler voices always, the others every frame), row ER99_NUM_TRIGGERS = the reverb and delay
+ * returns, the next row the master Comp's gain (1 when off), the last VOLUME. The output itself is unchanged. */
+#define ER99_STEM_FRAMES 128
+void er99_engine_set_stem(er99_engine_t *e, float *buf);
 
 /* Raw access in engineering units (ms, Hz, ...). Internal. */
 int er99_engine_set_raw(er99_engine_t *e, const char *key, float value);

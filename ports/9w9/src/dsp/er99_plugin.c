@@ -392,6 +392,25 @@ static void render_block(void *_instance, int16_t *_out_lr, const int _frames)
     }
 }
 
+/* ---- STEMS (mpc_pads_engine.c, the MPC adapter, records them) --------- */
+
+static const char *const kStemName[ER99_NUM_TRIGGERS] = {
+    "BD", "SD", "LT", "MT", "HT", "RS", "HC", "OH", "CH", "RC", "CR"
+};
+static const char *const kStemInfo[ER99_NUM_TRIGGERS] = {
+    "bass drum", "snare", "low tom", "mid tom", "high tom", "rim shot", "hand clap",
+    "open hat", "closed hat", "ride", "crash"
+};
+const char *trstem_kit(void) { return "9W9"; }
+int trstem_voices(void) { return ER99_NUM_TRIGGERS; }
+const char *trstem_voice(int v) { return v >= 0 && v < ER99_NUM_TRIGGERS ? kStemName[v] : "?"; }
+const char *trstem_voice_info(int v) { return v >= 0 && v < ER99_NUM_TRIGGERS ? kStemInfo[v] : ""; }
+void trstem_attach(void *_instance, float *buf)
+{
+    er99_instance_t *inst = (er99_instance_t*)_instance;
+    if(inst) er99_engine_set_stem(&inst->engine, buf);
+}
+
 static plugin_api_v2_t g_api = {
     .api_version     = 2,
     .create_instance = create_instance,

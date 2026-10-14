@@ -636,14 +636,17 @@ void er99_engine_render(er99_engine_t *e, float *out, const int frames)
             mix += v;
             rbus += v * e->send_rev[i];
             dbus += v * e->send_dly[i];
+            if(e->stem) e->stem[i * ER99_STEM_FRAMES + n] = v;   /* STEMS */
         }
         {
             const float v = er99_rim909_render(&e->rim909, noise);
             mix += v; rbus += v * e->send_rev[ER99_RS]; dbus += v * e->send_dly[ER99_RS];
+            if(e->stem) e->stem[ER99_RS * ER99_STEM_FRAMES + n] = v;
         }
         {
             const float v = er99_clap909_render(&e->clap909, noise);
             mix += v; rbus += v * e->send_rev[ER99_HC]; dbus += v * e->send_dly[ER99_HC];
+            if(e->stem) e->stem[ER99_HC * ER99_STEM_FRAMES + n] = v;
         }
         {
             static const int strig[ER99_NUM_SAMPLERS] = { ER99_OHH, ER99_RC, ER99_CR, ER99_CHH };
@@ -653,22 +656,38 @@ void er99_engine_render(er99_engine_t *e, float *out, const int frames)
                 mix += v;
                 rbus += v * e->send_rev[strig[i]];
                 dbus += v * e->send_dly[strig[i]];
+                if(e->stem) e->stem[strig[i] * ER99_STEM_FRAMES + n] = v;
             }
         }
 
         /* FX returns join the bus before the master stages, so master
          * distortion and the Comp work on the wet signal too. */
-        mix += er99_verb_tick(&e->verb, rbus);
-        mix += er99_dly_tick(&e->dly, dbus, e->sample_rate);
+        const float wet_r = er99_verb_tick(&e->verb, rbus);
+        const float wet_d = er99_dly_tick(&e->dly, dbus, e->sample_rate);
+        mix += wet_r;
+        mix += wet_d;
 
         if(e->master.dist_mode >= 0.5f)
             mix = er99_shape_st(mix * e->master.drive, e->master.drive,
                              e->master.dist_mode - 1.0f, e->master.crush_st) * 0.7f;
+        float glue_g = 1.0f;
         if(e->master.comp > 0.001f)
+        {
+            const float pre = mix;
             mix = master_glue(&e->master, mix, e->sample_rate);
+            if(fabsf(pre) > 1e-9f) glue_g = mix / pre;
+        }
         out[n] = mix * e->master.volume;
+        if(e->stem)   /* STEMS: the returns, the Comp's gain on this frame, VOLUME */
+        {
+            e->stem[ER99_NUM_TRIGGERS * ER99_STEM_FRAMES + n]       = wet_r + wet_d;
+            e->stem[(ER99_NUM_TRIGGERS + 1) * ER99_STEM_FRAMES + n] = glue_g;
+            e->stem[(ER99_NUM_TRIGGERS + 2) * ER99_STEM_FRAMES + n] = e->master.volume;
+        }
     }
 }
+
+void er99_engine_set_stem(er99_engine_t *e, float *buf) { e->stem = buf; }
 
 /* ===================================================================== */
 /* Parameters                                                             */
